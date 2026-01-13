@@ -1,9 +1,11 @@
 import os
 import pickle
 import string
+import math
 from collections import Counter
 from nltk.stem import PorterStemmer
 from .search_utils import load_movies, load_stopwords, PROJECT_ROOT
+from .constants import BM25_K1
 
 class InvertedIndex:
     def __init__(self):
@@ -61,6 +63,37 @@ class InvertedIndex:
             return 0
         return self.term_frequencies[doc_id][token]
 
+    def get_bm25_idf(self, term: str) -> float:
+        """Calculate BM25 IDF score for a term"""
+        # Tokenize the term
+        clean_term = term.translate(self.translator).lower()
+        tokens = [t for t in clean_term.split() if t]
+        tokens = [t for t in tokens if t not in self.stopwords]
+        tokens = [self.stemmer.stem(t) for t in tokens]
+
+        if len(tokens) == 0:
+            return 0.0
+        if len(tokens) > 1:
+            raise ValueError("get_bm25_idf expects a single token term")
+
+        token = tokens[0]
+
+        # Calculate BM25 IDF: log((N - df + 0.5) / (df + 0.5) + 1)
+        N = len(self.docmap)  # Total documents
+        doc_ids = self.get_documents(token)
+        df = len(doc_ids)  # Document frequency
+
+        bm25_idf = math.log((N - df + 0.5) / (df + 0.5) + 1)
+        return bm25_idf
+
+    def get_bm25_tf(self, doc_id: int, term: str, k1: float = BM25_K1) -> float:
+        """Calculate BM25 saturated term frequency"""
+        # Get raw TF
+        tf = self.get_tf(doc_id, term)
+
+        # Apply BM25 saturation formula
+        bm25_tf = (tf * (k1 + 1)) / (tf + k1)
+        return bm25_tf
 
     def build(self):
         """Build index and docmap from all movies"""
