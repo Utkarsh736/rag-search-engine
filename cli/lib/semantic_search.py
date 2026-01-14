@@ -47,17 +47,28 @@ def chunk_text(text: str, chunk_size: int = 200, overlap: int = 0) -> list[str]:
 
 def semantic_chunk_text(text: str, max_chunk_size: int = 4, overlap: int = 0) -> list[str]:
     """Split text into chunks by sentence boundaries with optional overlap"""
+    # Strip leading and trailing whitespace from input
+    text = text.strip()
+    
+    # If nothing left after stripping, return empty list
+    if not text:
+        return []
+    
     # Split text into sentences using regex
     # (?<=[.!?]) is a positive lookbehind: split after punctuation
     # \s+ matches one or more whitespace characters
     sentences = re.split(r"(?<=[.!?])\s+", text)
     
-    # Remove empty strings
-    sentences = [s for s in sentences if s.strip()]
+    # Remove empty strings and strip whitespace from each sentence
+    sentences = [s.strip() for s in sentences if s.strip()]
     
     # Handle edge cases
     if not sentences:
         return []
+    
+    # If only one sentence and it doesn't end with punctuation, treat whole text as one sentence
+    if len(sentences) == 1 and not text.endswith(('.', '!', '?')):
+        return [text]
     
     chunks = []
     i = 0
@@ -65,8 +76,11 @@ def semantic_chunk_text(text: str, max_chunk_size: int = 4, overlap: int = 0) ->
     while i < len(sentences):
         # Get max_chunk_size sentences starting from position i
         chunk_sentences = sentences[i:i + max_chunk_size]
-        chunk = " ".join(chunk_sentences)
-        chunks.append(chunk)
+        chunk = " ".join(chunk_sentences).strip()
+        
+        # Only append chunk if it has content after stripping
+        if chunk:
+            chunks.append(chunk)
         
         # Break if this is the last chunk
         if i + max_chunk_size >= len(sentences):
@@ -76,6 +90,7 @@ def semantic_chunk_text(text: str, max_chunk_size: int = 4, overlap: int = 0) ->
         i += max_chunk_size - overlap
     
     return chunks
+
 
 
 
