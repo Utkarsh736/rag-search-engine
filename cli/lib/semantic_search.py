@@ -4,6 +4,17 @@ from sentence_transformers import SentenceTransformer
 from .search_utils import load_movies, PROJECT_ROOT
 
 
+def cosine_similarity(vec1, vec2):
+    """Calculate cosine similarity between two vectors"""
+    dot_product = np.dot(vec1, vec2)
+    norm1 = np.linalg.norm(vec1)
+    norm2 = np.linalg.norm(vec2)
+
+    if norm1 == 0 or norm2 == 0:
+        return 0.0
+
+    return dot_product / (norm1 * norm2)
+
 class SemanticSearch:
     def __init__(self):
         """Initialize the semantic search model"""
@@ -67,6 +78,33 @@ class SemanticSearch:
         
         # Build embeddings from scratch
         return self.build_embeddings(documents)
+    
+    def search(self, query: str, limit: int = 5) -> list[dict]:
+        """Search for documents using semantic similarity"""
+        # Check if embeddings are loaded
+        if self.embeddings is None:
+            raise ValueError("No embeddings loaded. Call `load_or_create_embeddings` first.")
+        
+        # Generate query embedding
+        query_embedding = self.generate_embedding(query)
+        
+        # Calculate similarity scores for all documents
+        results = []
+        for i, doc_embedding in enumerate(self.embeddings):
+            similarity = cosine_similarity(query_embedding, doc_embedding)
+            doc = self.documents[i]
+            
+            results.append({
+                'score': similarity,
+                'title': doc['title'],
+                'description': doc['description']
+            })
+        
+        # Sort by similarity score (descending)
+        results.sort(key=lambda x: x['score'], reverse=True)
+        
+        # Return top results
+        return results[:limit]
 
 
 def verify_model():
