@@ -5,13 +5,14 @@ import math
 from collections import Counter
 from nltk.stem import PorterStemmer
 from .search_utils import load_movies, load_stopwords, PROJECT_ROOT
-from .constants import BM25_K1
+from .constants import BM25_K1, BM25_B
 
 class InvertedIndex:
     def __init__(self):
         self.index = {}
         self.docmap = {}
         self.term_frequencies = {}
+        self.doc_lengths = {}
         self.stemmer = PorterStemmer()
         self.stopwords = load_stopwords()
         self.translator = str.maketrans('', '', string.punctuation)
@@ -23,6 +24,9 @@ class InvertedIndex:
         tokens = [token for token in clean_text.split() if token]
         tokens = [token for token in tokens if token not in self.stopwords]
         tokens = [self.stemmer.stem(token) for token in tokens]
+
+        # Track document length (total token count)
+        self.doc_lengths[doc_id] = len(tokens)
 
         if doc_id not in self.term_frequencies:
             self.term_frequencies[doc_id] = Counter()
@@ -86,14 +90,72 @@ class InvertedIndex:
         bm25_idf = math.log((N - df + 0.5) / (df + 0.5) + 1)
         return bm25_idf
 
-    def get_bm25_tf(self, doc_id: int, term: str, k1: float = BM25_K1) -> float:
-        """Calculate BM25 saturated term frequency"""
+    def __get_avg_doc_length(self) -> float:
+
+        """Calculate average document length"""
+        if not self.doc_lengths:
+            return 0.0
+        return sum(self.doc_lengths.values()) / len(self.doc_lengths)
+
+
+    def get_bm25_tf(self, doc_id: int, term: str, k1: float = BM25_K1, b: float = BM25_B) -> float:
+        """Calculate BM25 saturated term frequency with length normalization"""
         # Get raw TF
         tf = self.get_tf(doc_id, term)
-
-        # Apply BM25 saturation formula
-        bm25_tf = (tf * (k1 + 1)) / (tf + k1)
+        
+        # Get document length and average
+        doc_length = self.doc_lengths.get(doc_id, 0)
+        avg_doc_length = self.__get_avg_doc_length()
+        
+        # Avoid division by zero
+        if avg_doc_length == 0:
+            return 0.0
+        
+        # Apply BM25 formula with length normalization
+        length_norm = 1 - b + b * (doc_length / avg_doc_length)
+        bm25_tf = (tf * (k1 + 1)) / (tf + k1 * length_norm)
+        
         return bm25_tf
+
+    def bm25(self, doc_id: int, term: str) -> float:
+        """Calculate full BM25 score for a term in a document"""
+        bm25_tf = self.get_bm25_tf(doc_id, term)
+        bm25_idf = self.get_bm25_idf(term)
+        return bm25_tf * bm25_idf
+
+    def bm25_search(self, query: str, limit: int = 5) -> list[tuple[int, float]]:
+        """Search documents using BM25 scoring"""
+        # Tokenize query
+        clean_query = query.translate(self.translator).lower()
+        query_tokens = [t for t in clean_query.split() if t]
+        query_tokens = [t for t in query_tokens if t not in self.stopwords]
+        query_tokens = [self.stemmer.stem(t) for t in query_tokens]
+
+        # If no valid tokens, return empty
+        if not query_tokens:
+            return []
+
+        # Calculate scores for all documents
+        scores = {}  # {doc_id: total_bm25_score}
+
+        # Get all candidate documents (union of all docs containing any query token)
+        candidate_docs = set()
+        for token in query_tokens:
+            doc_ids = self.get_documents(token)
+            candidate_docs.update(doc_ids)
+
+        # Calculate BM25 score for each candidate document
+        for doc_id in candidate_docs:
+            total_score = 0.0
+            for token in query_tokens:
+                # Add BM25 score for this token
+                total_score += self.bm25(doc_id, token)
+            scores[doc_id] = total_score
+
+        # Sort by score descending and return top 'limit'
+        sorted_docs = sorted(scores.items(), key=lambda x: x[1], reverse=True)
+        return sorted_docs[:limit]
+
 
     def build(self):
         """Build index and docmap from all movies"""
@@ -132,12 +194,24 @@ class InvertedIndex:
         with open(tf_path, "wb") as f:
             pickle.dump(self.term_frequencies, f)
 
+        # Save doc_lengths
+        with open(os.path.join(cache_dir, "doc_lengths.pkl"), "wb") as f:
+            pickle.dump(self.doc_lengths, f)
+
     def load(self) -> None:
+        """ Load index, docmap, term_frequencies, and doc_lengths from disk"""
+        cache_dir = os.path.join(PROJECT_ROOT, "cache")
         index_path = os.path.join(PROJECT_ROOT, "cache", "index.pkl")
         docmap_path = os.path.join(PROJECT_ROOT, "cache", "docmap.pkl")
         tf_path = os.path.join(PROJECT_ROOT, "cache", "term_frequencies.pkl")
+        doc_lengths_path = os.path.join(cache_dir, "doc_lengths.pkl")
 
-        if not os.path.exists(index_path) or not os.path.exists(docmap_path):
+        if not all([
+            os.path.exists(index_path),
+            os.path.exists(docmap_path),
+            os.path.exists(tf_path),
+            os.path.exists(doc_lengths_path)
+        ]):
             raise FileNotFoundError("Index files not found. Run the build command first.")
 
         with open(index_path, "rb") as f:
@@ -148,4 +222,7 @@ class InvertedIndex:
 
         with open(tf_path, "rb") as f:
             self.term_frequencies = pickle.load(f)
+
+        with open(doc_lengths_path, "rb") as f:
+            self.doc_lengths = pickle.load(f)
 

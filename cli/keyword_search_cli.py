@@ -9,7 +9,7 @@ from nltk.stem import PorterStemmer
 from lib.inverted_index import InvertedIndex
 from lib.search_utils import load_stopwords
 from lib.keyword_search import bm25_idf_command, bm25_tf_command
-from lib.constants import BM25_K1
+from lib.constants import BM25_K1, BM25_B
 
 def normalize_to_tokens(text: str) -> list[str]:
     translator = str.maketrans("", "", string.punctuation)
@@ -50,6 +50,12 @@ def main() -> None:
     bm25_tf_parser.add_argument("doc_id", type=int, help="Document ID")
     bm25_tf_parser.add_argument("term", type=str, help="Term to get BM25 TF score for")
     bm25_tf_parser.add_argument("k1", type=float, nargs='?', default=BM25_K1, help="Tunable BM25 K1 parameter")
+    bm25_tf_parser.add_argument("b", type=float, nargs='?', default=BM25_B, help="Tunable BM25 b parameter")    
+
+    bm25search_parser = subparsers.add_parser("bm25search", help="Search movies using full BM25 scoring")
+    bm25search_parser.add_argument("query", type=str, help="Search query")
+    bm25search_parser.add_argument("--limit", type=int, default=5, help="Number of results to return")
+
 
     args = parser.parse_args()
 
@@ -172,8 +178,24 @@ def main() -> None:
 
         case "bm25tf":
             try:
-                bm25tf = bm25_tf_command(args.doc_id, args.term, args.k1)
+                bm25tf = bm25_tf_command(args.doc_id, args.term, args.k1, args.b)
                 print(f"BM25 TF score of '{args.term}' in document '{args.doc_id}': {bm25tf:.2f}")
+            except FileNotFoundError:
+                print("Error: index not found. Run: uv run cli/keyword_search_cli.py build")
+                sys.exit(1)
+
+        case "bm25search":
+            try:
+                idx = InvertedIndex()
+                idx.load()
+                
+                limit = args.limit if hasattr(args, 'limit') else 5
+                results = idx.bm25_search(args.query, limit)
+                
+                for i, (doc_id, score) in enumerate(results, 1):
+                    movie = idx.docmap[doc_id]
+                    print(f"{i}. ({doc_id}) {movie['title']} - Score: {score:.2f}")
+            
             except FileNotFoundError:
                 print("Error: index not found. Run: uv run cli/keyword_search_cli.py build")
                 sys.exit(1)
