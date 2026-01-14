@@ -1,4 +1,5 @@
 import os
+import json
 import re
 import numpy as np
 from sentence_transformers import SentenceTransformer
@@ -79,9 +80,9 @@ def semantic_chunk_text(text: str, max_chunk_size: int = 4, overlap: int = 0) ->
 
 
 class SemanticSearch:
-    def __init__(self):
+    def __init__(self, model_name="all-MiniLM-L6-v2"):
         """Initialize the semantic search model"""
-        self.model = SentenceTransformer('all-MiniLM-L6-v2')
+        self.model = SentenceTransformer(model_name)
         self.embeddings = None
         self.documents = None
         self.document_map = {}
@@ -169,6 +170,94 @@ class SemanticSearch:
         # Return top results
         return results[:limit]
 
+class ChunkedSemanticSearch(SemanticSearch):
+    def __init__(self, model_name="all-MiniLM-L6-v2") -> None:
+        super().__init__(model_name)
+        self.chunk_embeddings = None
+        self.chunk_metadata = None
+    
+    def build_chunk_embeddings(self, documents: list[dict]):
+        """Generate embeddings for document chunks"""
+        self.documents = documents
+        
+        # Build document map
+        for doc in documents:
+            self.document_map[doc['id']] = doc
+        
+        all_chunks = []  # List of chunk strings
+        chunk_metadata = []  # List of metadata dicts
+        
+        # Process each document
+        for movie_idx, doc in enumerate(documents):
+            # Skip empty descriptions
+            description = doc.get('description', '').strip()
+            if not description:
+                continue
+            
+            # Chunk the description (4 sentences per chunk, 1 sentence overlap)
+            chunks = semantic_chunk_text(description, max_chunk_size=4, overlap=1)
+            
+            # Add chunks and metadata
+            for chunk_idx, chunk in enumerate(chunks):
+                all_chunks.append(chunk)
+                chunk_metadata.append({
+                    'movie_idx': movie_idx,
+                    'chunk_idx': chunk_idx,
+                    'total_chunks': len(chunks)
+                })
+        
+        # Generate embeddings for all chunks
+        print(f"Generating embeddings for {len(all_chunks)} chunks...")
+        self.chunk_embeddings = self.model.encode(all_chunks, show_progress_bar=True)
+        self.chunk_metadata = chunk_metadata
+        
+        # Save to cache
+        cache_dir = os.path.join(PROJECT_ROOT, "cache")
+        os.makedirs(cache_dir, exist_ok=True)
+        
+        # Save embeddings
+        embeddings_path = os.path.join(cache_dir, "chunk_embeddings.npy")
+        np.save(embeddings_path, self.chunk_embeddings)
+        
+        # Save metadata as JSON
+        metadata_path = os.path.join(cache_dir, "chunk_metadata.json")
+        with open(metadata_path, "w") as f:
+            json.dump({
+                "chunks": chunk_metadata,
+                "total_chunks": len(all_chunks)
+            }, f, indent=2)
+        
+        return self.chunk_embeddings
+    
+    def load_or_create_chunk_embeddings(self, documents: list[dict]) -> np.ndarray:
+        """Load chunk embeddings from cache or create them"""
+        self.documents = documents
+        
+        # Build document map
+        for doc in documents:
+            self.document_map[doc['id']] = doc
+        
+        # Check if cache exists
+        cache_dir = os.path.join(PROJECT_ROOT, "cache")
+        embeddings_path = os.path.join(cache_dir, "chunk_embeddings.npy")
+        metadata_path = os.path.join(cache_dir, "chunk_metadata.json")
+        
+        if os.path.exists(embeddings_path) and os.path.exists(metadata_path):
+            print("Loading cached chunk embeddings...")
+            
+            # Load embeddings
+            self.chunk_embeddings = np.load(embeddings_path)
+            
+            # Load metadata
+            with open(metadata_path, "r") as f:
+                metadata = json.load(f)
+                self.chunk_metadata = metadata['chunks']
+            
+            return self.chunk_embeddings
+        
+        # Build from scratch
+        return self.build_chunk_embeddings(documents)
+    
 
 def verify_model():
     """Verify the embedding model is loaded correctly"""
@@ -214,3 +303,6 @@ def embed_query_text(query: str):
     print(f"Query: {query}")
     print(f"First 5 dimensions: {embedding[:5]}")
     print(f"Shape: {embedding.shape}")
+
+
+
