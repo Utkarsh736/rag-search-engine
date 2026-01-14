@@ -258,6 +258,66 @@ class ChunkedSemanticSearch(SemanticSearch):
         # Build from scratch
         return self.build_chunk_embeddings(documents)
     
+    def search_chunks(self, query: str, limit: int = 10) -> list[dict]:
+        """Search using chunk embeddings and aggregate results by movie"""
+        # Check if chunk embeddings are loaded
+        if self.chunk_embeddings is None:
+            raise ValueError("No chunk embeddings loaded. Call `load_or_create_chunk_embeddings` first.")
+        
+        # Generate query embedding
+        query_embedding = self.generate_embedding(query)
+        
+        # Store chunk scores
+        chunk_scores = []
+        
+        # Calculate similarity for each chunk
+        for chunk_idx, chunk_embedding in enumerate(self.chunk_embeddings):
+            similarity = cosine_similarity(query_embedding, chunk_embedding)
+            
+            # Get movie index from metadata
+            movie_idx = self.chunk_metadata[chunk_idx]['movie_idx']
+            
+            chunk_scores.append({
+                'chunk_idx': chunk_idx,
+                'movie_idx': movie_idx,
+                'score': similarity
+            })
+        
+        # Aggregate scores by movie (keep highest score per movie)
+        movie_scores = {}
+        for chunk_score in chunk_scores:
+            movie_idx = chunk_score['movie_idx']
+            score = chunk_score['score']
+            
+            # Update if this is the first score or a higher score
+            if movie_idx not in movie_scores or score > movie_scores[movie_idx]:
+                movie_scores[movie_idx] = score
+        
+        # Convert to list and sort by score (descending)
+        sorted_movies = sorted(movie_scores.items(), key=lambda x: x[1], reverse=True)
+        
+        # Take top limit movies
+        top_movies = sorted_movies[:limit]
+        
+        # Format results
+        SCORE_PRECISION = 4
+        results = []
+        
+        for movie_idx, score in top_movies:
+            doc = self.documents[movie_idx]
+            
+            result = {
+                'id': doc['id'],
+                'title': doc['title'],
+                'document': doc['description'][:100],
+                'score': round(score, SCORE_PRECISION),
+                'metadata': doc.get('metadata', {})
+            }
+            results.append(result)
+        
+        return results
+
+    
 
 def verify_model():
     """Verify the embedding model is loaded correctly"""

@@ -17,6 +17,25 @@ from lib.semantic_search import (
 )
 from lib.search_utils import load_movies
 
+def search_chunked(query: str, limit: int = 5):
+    """Search movies using chunked semantic search"""
+    # Load movies
+    documents = load_movies()
+    
+    # Initialize chunked search
+    chunked_search = ChunkedSemanticSearch()
+    
+    # Load or create chunk embeddings
+    chunked_search.load_or_create_chunk_embeddings(documents)
+    
+    # Perform search
+    results = chunked_search.search_chunks(query, limit=limit)
+    
+    # Print results
+    for i, result in enumerate(results, 1):
+        print(f"\n{i}. {result['title']} (score: {result['score']:.4f})")
+        print(f"   {result['document']}...")
+
 
 def main():
     parser = argparse.ArgumentParser(description="Semantic Search CLI")
@@ -55,6 +74,11 @@ def main():
     
     # Embed chunks
     subparsers.add_parser("embed_chunks", help="Generate chunked embeddings for all movies")
+
+    # Search chunked
+    search_chunked_parser = subparsers.add_parser("search_chunked", help="Search movies using chunked embeddings")
+    search_chunked_parser.add_argument("query", type=str, help="Search query")
+    search_chunked_parser.add_argument("--limit", type=int, default=5, help="Number of results to return")
 
     args = parser.parse_args()
 
@@ -120,7 +144,9 @@ def main():
             # Print results
             print(f"Generated {len(embeddings)} chunked embeddings")
 
-        
+        case "search_chunked": 
+            search_chunked(args.query, args.limit)
+
         case _:
             parser.print_help()
 
