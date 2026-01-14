@@ -5,7 +5,14 @@ import sys
 
 sys.path.insert(0, '.')
 
-from lib.semantic_search import verify_model, embed_text, verify_embeddings, embed_query_text, SemanticSearch
+from lib.semantic_search import (
+    verify_model, 
+    embed_text, 
+    verify_embeddings, 
+    embed_query_text, 
+    SemanticSearch,
+    chunk_text  
+)
 from lib.search_utils import load_movies
 
 
@@ -32,6 +39,12 @@ def main():
     search_parser.add_argument("query", type=str, help="Search query")
     search_parser.add_argument("--limit", type=int, default=5, help="Number of results to return")
     
+    # Chunk
+    chunk_parser = subparsers.add_parser("chunk", help="Split text into fixed-size chunks")
+    chunk_parser.add_argument("text", type=str, help="Text to chunk")
+    chunk_parser.add_argument("--chunk-size", type=int, default=200, help="Number of words per chunk")
+    chunk_parser.add_argument("--overlap", type=int, default=0, help="Number of overlapping words between chunks") 
+    
     args = parser.parse_args()
 
     match args.command:
@@ -48,25 +61,32 @@ def main():
             embed_query_text(args.query)
         
         case "search":
-            # Create semantic search instance
             semantic_search = SemanticSearch()
-            
-            # Load movies and embeddings
             documents = load_movies()
             semantic_search.load_or_create_embeddings(documents)
-            
-            # Perform search
             results = semantic_search.search(args.query, args.limit)
             
-            # Print results
             for i, result in enumerate(results, 1):
-                # Truncate description to ~100 chars
                 desc = result['description']
                 if len(desc) > 100:
                     desc = desc[:97] + "..."
                 
                 print(f"{i}. {result['title']} (score: {result['score']:.4f})")
                 print(f"   {desc}\n")
+        
+        case "chunk":
+            # Get arguments
+            chunk_size = args.chunk_size if hasattr(args, 'chunk_size') else 200
+            overlap = args.overlap if hasattr(args, 'overlap') else 0
+            
+            # Chunk the text
+            chunks = chunk_text(args.text, chunk_size, overlap)
+            
+            # Print results
+            print(f"Chunking {len(args.text)} characters")
+            for i, chunk in enumerate(chunks, 1):
+                print(f"{i}. {chunk}")
+
         
         case _:
             parser.print_help()

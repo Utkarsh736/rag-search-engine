@@ -15,6 +15,35 @@ def cosine_similarity(vec1, vec2):
 
     return dot_product / (norm1 * norm2)
 
+def chunk_text(text: str, chunk_size: int = 200, overlap: int = 0) -> list[str]:
+    """Split text into fixed-size chunks by word count with optional overlap"""
+    # Split text into words
+    words = text.split()
+    
+    # Handle edge cases
+    if not words:
+        return []
+    
+    chunks = []
+    i = 0
+    
+    while i < len(words):
+        # Get chunk_size words starting from position i
+        chunk_words = words[i:i + chunk_size]
+        chunk = " ".join(chunk_words)
+        chunks.append(chunk)
+        
+        # Move forward by (chunk_size - overlap) words
+        # If this is the last chunk, break to avoid infinite loop
+        if i + chunk_size >= len(words):
+            break
+        
+        i += chunk_size - overlap
+    
+    return chunks
+
+
+
 class SemanticSearch:
     def __init__(self):
         """Initialize the semantic search model"""
