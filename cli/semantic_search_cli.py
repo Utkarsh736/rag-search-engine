@@ -11,7 +11,8 @@ from lib.semantic_search import (
     verify_embeddings, 
     embed_query_text, 
     SemanticSearch,
-    chunk_text  
+    chunk_text,
+    semantic_chunk_text,  
 )
 from lib.search_utils import load_movies
 
@@ -44,6 +45,12 @@ def main():
     chunk_parser.add_argument("text", type=str, help="Text to chunk")
     chunk_parser.add_argument("--chunk-size", type=int, default=200, help="Number of words per chunk")
     chunk_parser.add_argument("--overlap", type=int, default=0, help="Number of overlapping words between chunks") 
+
+    # Semantic chunk
+    semantic_chunk_parser = subparsers.add_parser("semantic_chunk", help="Split text into semantic chunks by sentences")
+    semantic_chunk_parser.add_argument("text", type=str, help="Text to chunk")
+    semantic_chunk_parser.add_argument("--max-chunk-size", type=int, default=4, help="Maximum number of sentences per chunk")
+    semantic_chunk_parser.add_argument("--overlap", type=int, default=0, help="Number of overlapping sentences between chunks")
     
     args = parser.parse_args()
 
@@ -84,6 +91,15 @@ def main():
             
             # Print results
             print(f"Chunking {len(args.text)} characters")
+            for i, chunk in enumerate(chunks, 1):
+                print(f"{i}. {chunk}")
+
+        case "semantic_chunk":
+            max_chunk_size = args.max_chunk_size if hasattr(args, 'max_chunk_size') else 4
+            overlap = args.overlap if hasattr(args, 'overlap') else 0
+            chunks = semantic_chunk_text(args.text, max_chunk_size, overlap)
+            
+            print(f"Semantically chunking {len(args.text)} characters")
             for i, chunk in enumerate(chunks, 1):
                 print(f"{i}. {chunk}")
 

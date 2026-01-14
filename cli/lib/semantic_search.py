@@ -1,4 +1,5 @@
 import os
+import re
 import numpy as np
 from sentence_transformers import SentenceTransformer
 from .search_utils import load_movies, PROJECT_ROOT
@@ -39,6 +40,39 @@ def chunk_text(text: str, chunk_size: int = 200, overlap: int = 0) -> list[str]:
             break
         
         i += chunk_size - overlap
+    
+    return chunks
+
+
+def semantic_chunk_text(text: str, max_chunk_size: int = 4, overlap: int = 0) -> list[str]:
+    """Split text into chunks by sentence boundaries with optional overlap"""
+    # Split text into sentences using regex
+    # (?<=[.!?]) is a positive lookbehind: split after punctuation
+    # \s+ matches one or more whitespace characters
+    sentences = re.split(r"(?<=[.!?])\s+", text)
+    
+    # Remove empty strings
+    sentences = [s for s in sentences if s.strip()]
+    
+    # Handle edge cases
+    if not sentences:
+        return []
+    
+    chunks = []
+    i = 0
+    
+    while i < len(sentences):
+        # Get max_chunk_size sentences starting from position i
+        chunk_sentences = sentences[i:i + max_chunk_size]
+        chunk = " ".join(chunk_sentences)
+        chunks.append(chunk)
+        
+        # Break if this is the last chunk
+        if i + max_chunk_size >= len(sentences):
+            break
+        
+        # Move forward by (max_chunk_size - overlap) sentences
+        i += max_chunk_size - overlap
     
     return chunks
 
