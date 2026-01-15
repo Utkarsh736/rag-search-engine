@@ -6,6 +6,7 @@ import sys
 sys.path.insert(0, '.')
 
 from lib.hybrid_search import HybridSearch, normalize_scores
+from lib.query_enhancement import enhance_query_spell
 from lib.search_utils import load_movies
 
 
@@ -28,6 +29,12 @@ def main() -> None:
     rrf_parser.add_argument("query", type=str, help="Search query")
     rrf_parser.add_argument("-k", type=int, default=60, help="RRF constant k (default: 60)")
     rrf_parser.add_argument("--limit", type=int, default=5, help="Number of results to return (default: 5)")
+    rrf_parser.add_argument(
+        "--enhance",
+        type=str,
+        choices=["spell"],
+        help="Query enhancement method"
+    )
     
     args = parser.parse_args()
 
@@ -60,6 +67,14 @@ def main() -> None:
                 print(f"   {doc_snippet}")
         
         case "rrf-search":
+            # Handle query enhancement
+            query = args.query
+            if hasattr(args, 'enhance') and args.enhance == "spell": 
+                enhanced_query = enhance_query_spell(query)
+                if enhanced_query != query:
+                    print(f"Enhanced query (spell): '{query}' -> '{enhanced_query}'\n")
+                    query = enhanced_query
+            
             # Load documents
             documents = load_movies()
             
@@ -67,7 +82,7 @@ def main() -> None:
             hybrid_search = HybridSearch(documents)
             
             # Perform RRF search
-            results = hybrid_search.rrf_search(args.query, args.k, args.limit)
+            results = hybrid_search.rrf_search(query, args.k, args.limit)
             
             # Print results
             for i, result in enumerate(results, 1):
