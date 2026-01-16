@@ -6,7 +6,7 @@ import sys
 sys.path.insert(0, '.')
 
 from lib.hybrid_search import HybridSearch, normalize_scores
-from lib.query_enhancement import enhance_query_spell, enhance_query_rewrite, enhance_query_expand, rerank_individual, rerank_batch, rerank_cross_encoder
+from lib.query_enhancement import enhance_query_spell, enhance_query_rewrite, enhance_query_expand, rerank_individual, rerank_batch, rerank_cross_encoder, evaluate_results
 from lib.search_utils import load_movies
 
 
@@ -41,7 +41,12 @@ def main() -> None:
         choices=["individual", "batch", "cross_encoder"],
         help="LLM-based re-ranking method"
     )
-    
+    rrf_parser.add_argument(
+        "--evaluate",
+        action="store_true",  # ← Boolean flag
+        help="Evaluate search results using LLM"
+    )
+
     args = parser.parse_args()
 
     match args.command:
@@ -73,6 +78,9 @@ def main() -> None:
                 print(f"   {doc_snippet}")
         
         case "rrf-search":
+
+            # 1. Log original query
+            print(f"[DEBUG] Original query: '{args.query}'")
             # Handle query enhancement
             query = args.query
             
@@ -94,7 +102,13 @@ def main() -> None:
                     if enhanced_query != query:
                         print(f"Enhanced query (expand): '{query}' -> '{enhanced_query}'\n")
                         query = enhanced_query
-            
+
+            # 2. Log query after enhancements
+            if query != args.query:
+                print(f"[DEBUG] Query after enhancement: '{query}'")
+            else:
+                print(f"[DEBUG] Query after enhancement: No changes")
+
             # Load documents
             documents = load_movies()
             
@@ -108,6 +122,14 @@ def main() -> None:
             
             # Perform RRF search with (possibly enhanced) query
             results = hybrid_search.rrf_search(query, args.k, fetch_limit)
+
+            # 3. Log results after RRF search
+            print(f"[DEBUG] Results after RRF search (top {fetch_limit}):")
+            for i, result in enumerate(results[:min(5, len(results))], 1):
+                print(f"[DEBUG]   {i}. {result['title']} (RRF: {result['rrf_score']:.4f})")
+            if len(results) > 5:
+                print(f"[DEBUG]   ... and {len(results) - 5} more results")
+            print()
             
             # Apply reranking if requested
             if hasattr(args, 'rerank_method') and args.rerank_method:
@@ -128,7 +150,20 @@ def main() -> None:
                     results = rerank_cross_encoder(query, results)
                     results = results[:args.limit]
                     print(f"\nReciprocal Rank Fusion Results for '{query}' (k={args.k}):\n")
-            
+
+                # 4. Log final results after re-ranking
+                print(f"[DEBUG] Final results after re-ranking (top {args.limit}):")
+                for i, result in enumerate(results, 1):
+                    score_info = ""
+                    if 'rerank_score' in result:
+                        score_info = f"Rerank: {result['rerank_score']:.3f}/10"
+                    elif 'rerank_rank' in result:
+                        score_info = f"Rerank Rank: {result['rerank_rank']}"
+                    elif 'cross_encoder_score' in result:
+                        score_info = f"Cross: {result['cross_encoder_score']:.3f}"
+                    print(f"[DEBUG]   {i}. {result['title']} ({score_info}, RRF: {result['rrf_score']:.4f})")
+                print()
+
             # Print results
             for i, result in enumerate(results, 1):
                 # Truncate document to 100 characters
@@ -154,6 +189,14 @@ def main() -> None:
                 print(f"   BM25 Rank: {bm25_rank}, Semantic Rank: {semantic_rank}")
                 print(f"   {doc_snippet}")
 
+                        # Evaluate results if requested
+            if hasattr(args, 'evaluate') and args.evaluate:
+                print("\n[Evaluating results...]")
+                scores = evaluate_results(query, results)
+                
+                print("\nEvaluation Report:")
+                for i, (result, score) in enumerate(zip(results, scores), 1):
+                    print(f"{i}. {result['title']}: {score}/3")
 
         
         case _:

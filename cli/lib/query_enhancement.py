@@ -310,3 +310,71 @@ def rerank_cross_encoder(query: str, results: list[dict]) -> list[dict]:
     results.sort(key=lambda x: x['cross_encoder_score'], reverse=True)
     
     return results
+
+def evaluate_results(query: str, results: list[dict]) -> list[int]:
+    """Use Gemini to evaluate search result relevance"""
+    # Load API key
+    load_dotenv()
+    api_key = os.environ.get("GEMINI_API_KEY")
+    
+    if not api_key:
+        raise ValueError("GEMINI_API_KEY not found in environment")
+    
+    # Create Gemini client
+    client = genai.Client(api_key=api_key)
+    
+    # Format results for the prompt
+    formatted_results = []
+    for i, result in enumerate(results, 1):
+        formatted_results.append(f"{i}. {result['title']} - {result.get('document', '')[:200]}")
+    
+    # System prompt for evaluation
+    prompt = f"""Rate how relevant each result is to this query on a 0-3 scale:
+
+Query: "{query}"
+
+Results:
+{chr(10).join(formatted_results)}
+
+Scale:
+- 3: Highly relevant
+- 2: Relevant
+- 1: Marginally relevant
+- 0: Not relevant
+
+Do NOT give any numbers out than 0, 1, 2, or 3.
+
+Return ONLY the scores in the same order you were given the documents. Return a valid JSON list, nothing else. For example:
+
+[2, 0, 3, 2, 0, 1]"""
+    
+    try:
+        # Get response from Gemini
+        response = client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=prompt
+        )
+        
+        # Extract and parse JSON response
+        response_text = response.text.strip()
+        
+        # Clean up response if needed (remove markdown code blocks)
+        if response_text.startswith("```"):
+            # Remove ```json or ``` prefix and suffix
+            lines = response_text.split('\n')
+            response_text = '\n'.join(lines[1:-1]) if len(lines) > 2 else response_text
+        
+        # Parse JSON
+        scores = json.loads(response_text)
+        
+        # Validate scores are 0-3
+        scores = [max(0, min(3, int(score))) for score in scores]
+        
+        return scores
+        
+    except Exception as e:
+        print(f"Warning: Evaluation failed: {e}")
+        print(f"Response was: {response_text if 'response_text' in locals() else 'No response'}")
+        # Return default scores (all 2s - "relevant")
+        return [2 for _ in results]
+
