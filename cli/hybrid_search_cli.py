@@ -6,7 +6,7 @@ import sys
 sys.path.insert(0, '.')
 
 from lib.hybrid_search import HybridSearch, normalize_scores
-from lib.query_enhancement import enhance_query_spell, enhance_query_rewrite, enhance_query_expand  # ← Add expand
+from lib.query_enhancement import enhance_query_spell, enhance_query_rewrite, enhance_query_expand, rerank_individual, rerank_batch, rerank_cross_encoder
 from lib.search_utils import load_movies
 
 
@@ -32,8 +32,14 @@ def main() -> None:
     rrf_parser.add_argument(
         "--enhance",
         type=str,
-        choices=["spell", "rewrite", "expand"],  # ← Added "expand"
+        choices=["spell", "rewrite", "expand"],
         help="Query enhancement method"
+    )
+    rrf_parser.add_argument(
+        "--rerank-method",
+        type=str,
+        choices=["individual", "batch", "cross_encoder"],
+        help="LLM-based re-ranking method"
     )
     
     args = parser.parse_args()
@@ -95,8 +101,33 @@ def main() -> None:
             # Initialize hybrid search
             hybrid_search = HybridSearch(documents)
             
+            # Determine how many results to fetch
+            fetch_limit = args.limit
+            if hasattr(args, 'rerank_method') and args.rerank_method in ["individual", "batch", "cross_encoder"]:
+                fetch_limit = args.limit * 5  # Get 5x more for reranking
+            
             # Perform RRF search with (possibly enhanced) query
-            results = hybrid_search.rrf_search(query, args.k, args.limit)
+            results = hybrid_search.rrf_search(query, args.k, fetch_limit)
+            
+            # Apply reranking if requested
+            if hasattr(args, 'rerank_method') and args.rerank_method:
+                if args.rerank_method == "individual":
+                    print(f"Reranking top {fetch_limit} results using individual method...")
+                    results = rerank_individual(query, results)
+                    results = results[:args.limit]
+                    print(f"\nReciprocal Rank Fusion Results for '{query}' (k={args.k}):\n")
+                
+                elif args.rerank_method == "batch":
+                    print(f"Reranking top {fetch_limit} results using batch method...")
+                    results = rerank_batch(query, results)
+                    results = results[:args.limit]
+                    print(f"\nReciprocal Rank Fusion Results for '{query}' (k={args.k}):\n")
+                
+                elif args.rerank_method == "cross_encoder":
+                    print(f"Reranking top {fetch_limit} results using cross_encoder method...")
+                    results = rerank_cross_encoder(query, results)
+                    results = results[:args.limit]
+                    print(f"\nReciprocal Rank Fusion Results for '{query}' (k={args.k}):\n")
             
             # Print results
             for i, result in enumerate(results, 1):
@@ -110,9 +141,20 @@ def main() -> None:
                 semantic_rank = result['semantic_rank'] if result['semantic_rank'] is not None else "-"
                 
                 print(f"{i}. {result['title']}")
+                
+                # Show rerank score/rank based on method
+                if 'rerank_score' in result:
+                    print(f"   Rerank Score: {result['rerank_score']:.3f}/10")
+                elif 'rerank_rank' in result:
+                    print(f"   Rerank Rank: {result['rerank_rank']}")
+                elif 'cross_encoder_score' in result:
+                    print(f"   Cross Encoder Score: {result['cross_encoder_score']:.3f}")
+                
                 print(f"   RRF Score: {result['rrf_score']:.3f}")
                 print(f"   BM25 Rank: {bm25_rank}, Semantic Rank: {semantic_rank}")
                 print(f"   {doc_snippet}")
+
+
         
         case _:
             parser.print_help()
