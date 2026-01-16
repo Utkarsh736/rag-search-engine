@@ -3,6 +3,7 @@ import time
 import json
 from dotenv import load_dotenv
 from google import genai
+from lib.config import GEMINI_MODEL
 from sentence_transformers import CrossEncoder
 
 
@@ -30,7 +31,7 @@ Corrected:"""
     
     # Get response from Gemini
     response = client.models.generate_content(
-        model="gemini-2.5-flash",
+        model=GEMINI_MODEL,
         contents=prompt
     )
     
@@ -80,7 +81,7 @@ Rewritten query:"""
     
     # Get response from Gemini
     response = client.models.generate_content(
-        model="gemini-2.5-flash",
+        model=GEMINI_MODEL,
         contents=prompt
     )
     
@@ -126,7 +127,7 @@ Query: "{query}"
     
     # Get response from Gemini
     response = client.models.generate_content(
-        model="gemini-2.5-flash",
+        model=GEMINI_MODEL,
         contents=prompt
     )
     
@@ -176,7 +177,7 @@ Score:"""
         try:
             # Get response from Gemini
             response = client.models.generate_content(
-                model="gemini-2.5-flash",
+                model=GEMINI_MODEL,
                 contents=prompt
             )
             
@@ -243,7 +244,7 @@ Return ONLY the IDs in order of relevance (best match first). Return a valid JSO
     try:
         # Get response from Gemini
         response = client.models.generate_content(
-            model="gemini-2.5-flash",
+            model=GEMINI_MODEL,
             contents=prompt
         )
         
@@ -351,7 +352,7 @@ Return ONLY the scores in the same order you were given the documents. Return a 
     try:
         # Get response from Gemini
         response = client.models.generate_content(
-            model="gemini-2.5-flash",
+            model=GEMINI_MODEL,
             contents=prompt
         )
         

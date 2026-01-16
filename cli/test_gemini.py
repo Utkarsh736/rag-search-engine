@@ -12,7 +12,7 @@ client = genai.Client(api_key=api_key)
 
 # Generate content
 response = client.models.generate_content(
-    model="gemini-2.5-flash",
+    model="gemini-2.0-flash",
     contents="Why is Boot.dev such a great place to learn about RAG? Use one paragraph maximum."
 )
 
