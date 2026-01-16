@@ -6,7 +6,7 @@ import sys
 sys.path.insert(0, '.')
 
 from lib.hybrid_search import HybridSearch, normalize_scores
-from lib.query_enhancement import enhance_query_spell
+from lib.query_enhancement import enhance_query_spell, enhance_query_rewrite, enhance_query_expand  # ← Add expand
 from lib.search_utils import load_movies
 
 
@@ -32,7 +32,7 @@ def main() -> None:
     rrf_parser.add_argument(
         "--enhance",
         type=str,
-        choices=["spell"],
+        choices=["spell", "rewrite", "expand"],  # ← Added "expand"
         help="Query enhancement method"
     )
     
@@ -69,11 +69,25 @@ def main() -> None:
         case "rrf-search":
             # Handle query enhancement
             query = args.query
-            if hasattr(args, 'enhance') and args.enhance == "spell": 
-                enhanced_query = enhance_query_spell(query)
-                if enhanced_query != query:
-                    print(f"Enhanced query (spell): '{query}' -> '{enhanced_query}'\n")
-                    query = enhanced_query
+            
+            if hasattr(args, 'enhance') and args.enhance:
+                if args.enhance == "spell":
+                    enhanced_query = enhance_query_spell(query)
+                    if enhanced_query != query:
+                        print(f"Enhanced query (spell): '{query}' -> '{enhanced_query}'\n")
+                        query = enhanced_query
+                
+                elif args.enhance == "rewrite":
+                    enhanced_query = enhance_query_rewrite(query)
+                    if enhanced_query != query:
+                        print(f"Enhanced query (rewrite): '{query}' -> '{enhanced_query}'\n")
+                        query = enhanced_query
+                
+                elif args.enhance == "expand":
+                    enhanced_query = enhance_query_expand(query)
+                    if enhanced_query != query:
+                        print(f"Enhanced query (expand): '{query}' -> '{enhanced_query}'\n")
+                        query = enhanced_query
             
             # Load documents
             documents = load_movies()
@@ -81,7 +95,7 @@ def main() -> None:
             # Initialize hybrid search
             hybrid_search = HybridSearch(documents)
             
-            # Perform RRF search
+            # Perform RRF search with (possibly enhanced) query
             results = hybrid_search.rrf_search(query, args.k, args.limit)
             
             # Print results
