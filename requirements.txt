@@ -1,0 +1,10 @@
+# Core (matches pyproject.toml + Gradio)
+google-genai>=1.58.0
+nltk==3.9.1
+numpy>=2.0.0
+pillow>=10.0.0
+python-dotenv>=1.0.0
+sentence-transformers>=3.0.0
+gradio>=4.44.0
+torch  # pulled by sentence-transformers; pin if needed for CPU Spaces
+
