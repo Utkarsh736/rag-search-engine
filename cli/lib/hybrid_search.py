@@ -3,6 +3,7 @@ import os
 from .inverted_index import InvertedIndex 
 from .semantic_search import ChunkedSemanticSearch
 from .search_utils import PROJECT_ROOT
+from .cache_utils import verify_manifest
 
 
 def normalize_scores(scores: list[float]) -> list[float]:
@@ -27,6 +28,7 @@ def rrf_score(rank: int, k: int = 60) -> float:
 
 class HybridSearch:
     def __init__(self, documents):
+        verify_manifest()
         self.documents = documents
         
         # Initialize semantic search with chunked embeddings

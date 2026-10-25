@@ -1,3 +1,12 @@
+# Data directory — track small, stable assets; ignore the large movies.json
+data/*
+!data/golden_dataset.json
+!data/stopwords.txt
+!data/paddington.jpeg
+
+# Cache directory — always regenerable; not committed anywhere
+cache/
+
 # Python-generated files
 __pycache__/
 *.py[oc]
@@ -9,9 +18,5 @@ wheels/
 # Virtual environments
 .venv
 
-# Data directory
-data/
-
-# Cache directory
-cache/
+# Secrets
 .env

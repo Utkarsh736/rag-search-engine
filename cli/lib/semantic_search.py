@@ -4,6 +4,7 @@ import re
 import numpy as np
 from sentence_transformers import SentenceTransformer
 from .search_utils import load_movies, PROJECT_ROOT
+from .config import EMBEDDING_MODEL, CHUNK_SIZE, CHUNK_OVERLAP
 
 
 def cosine_similarity(vec1, vec2):
@@ -95,7 +96,7 @@ def semantic_chunk_text(text: str, max_chunk_size: int = 4, overlap: int = 0) ->
 
 
 class SemanticSearch:
-    def __init__(self, model_name="all-MiniLM-L6-v2"):
+    def __init__(self, model_name=EMBEDDING_MODEL):
         """Initialize the semantic search model"""
         self.model = SentenceTransformer(model_name)
         self.embeddings = None
@@ -186,7 +187,7 @@ class SemanticSearch:
         return results[:limit]
 
 class ChunkedSemanticSearch(SemanticSearch):
-    def __init__(self, model_name="all-MiniLM-L6-v2") -> None:
+    def __init__(self, model_name=EMBEDDING_MODEL) -> None:
         super().__init__(model_name)
         self.chunk_embeddings = None
         self.chunk_metadata = None
@@ -210,7 +211,7 @@ class ChunkedSemanticSearch(SemanticSearch):
                 continue
             
             # Chunk the description (4 sentences per chunk, 1 sentence overlap)
-            chunks = semantic_chunk_text(description, max_chunk_size=4, overlap=1)
+            chunks = semantic_chunk_text(description, max_chunk_size=CHUNK_SIZE, overlap=CHUNK_OVERLAP)
             
             # Add chunks and metadata
             for chunk_idx, chunk in enumerate(chunks):
